@@ -34,8 +34,8 @@ func (r requestData) isValid() bool {
 }
 
 type responseData struct {
-	AFactorial int `json:"a!"`
-	BFactorial int `json:"b!"`
+	AFactorial int `json:"a"`
+	BFactorial int `json:"b"`
 }
 
 func calculateFactorial(num int, ch chan int) {
@@ -51,9 +51,7 @@ func calculate(num int) int {
 }
 
 func calculateHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-
-	ctx := r.Context()
-	data := ctx.Value("data")
+	data := r.Context().Value("data")
 
 	convertedMap := data.(map[string]int)
 	a := convertedMap["a"]

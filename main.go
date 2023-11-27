@@ -22,29 +22,22 @@ func main() {
 }
 
 type requestData struct {
-	A int `json:"a"`
-	B int `json:"b"`
-}
-
-func (r requestData) isValid() bool {
-	if r.A < 0 || r.B < 0 {
-		return false
-	}
-	return true
+	A uint64 `json:"a"`
+	B uint64 `json:"b"`
 }
 
 type responseData struct {
-	AFactorial int `json:"a"`
-	BFactorial int `json:"b"`
+	AFactorial uint64 `json:"a"`
+	BFactorial uint64 `json:"b"`
 }
 
-func calculateFactorial(num int, ch chan int) {
+func calculateFactorial(num uint64, ch chan uint64) {
 	ch <- (num * calculate(num-1))
 }
 
-func calculate(num int) int {
-	factorial := 1
-	for i := 2; i <= num; i++ {
+func calculate(num uint64) uint64 {
+	var factorial uint64 = 1
+	for i := uint64(2); i <= num; i++ {
 		factorial *= i
 	}
 	return factorial
@@ -53,12 +46,12 @@ func calculate(num int) int {
 func calculateHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	data := r.Context().Value("data")
 
-	convertedMap := data.(map[string]int)
+	convertedMap := data.(map[string]uint64)
 	a := convertedMap["a"]
 	b := convertedMap["b"]
 
-	aCh := make(chan int)
-	bCh := make(chan int)
+	aCh := make(chan uint64)
+	bCh := make(chan uint64)
 	go calculateFactorial(a, aCh)
 	go calculateFactorial(b, bCh)
 
@@ -79,11 +72,7 @@ func calculateMiddleware(next httprouter.Handle) httprouter.Handle {
 			return
 		}
 
-		if !reqData.isValid() {
-			handleError(w, fmt.Errorf("Incorrect input"))
-			return
-		}
-		ctx := context.WithValue(r.Context(), "data", map[string]int{
+		ctx := context.WithValue(r.Context(), "data", map[string]uint64{
 			"a": reqData.A,
 			"b": reqData.B,
 		})

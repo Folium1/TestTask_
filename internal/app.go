@@ -4,24 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
 )
-
-func Run() {
-
-	router := httprouter.New()
-
-	router.POST("/calculate", factorialMiddleware(factorialHandler))
-
-	slog.Info("Starting server on port 8989")
-	err := http.ListenAndServe(":8989", router)
-	if err != nil {
-		slog.Error("Failed to start server:", err)
-	}
-}
 
 type requestData struct {
 	A uint64 `json:"a"`
@@ -33,52 +19,49 @@ type responseData struct {
 	BFactorial uint64 `json:"b"`
 }
 
-// factorialHandler handles concurrently factorials of 2 nums and returns them in json
-func factorialHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	data := r.Context().Value("data")
-
-	convertedMap := data.(map[string]uint64)
-	a := convertedMap["a"]
-	b := convertedMap["b"]
+// factorialHandler concurrently calculates the factorials of two numbers and returns them in JSON format.
+func FactorialHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	data := r.Context().Value("data").(map[string]uint64)
+	a := data["a"]
+	b := data["b"]
 
 	aCh := make(chan uint64)
 	bCh := make(chan uint64)
 	go сalculateFactorial(a, aCh)
 	go сalculateFactorial(b, bCh)
 
-	// wait for goroutines to finish calculation
-	outputData := responseData{
+	response := responseData{
 		AFactorial: <-aCh,
 		BFactorial: <-bCh,
 	}
 
-	json.NewEncoder(w).Encode(outputData)
+	json.NewEncoder(w).Encode(response)
 }
 
-// factorialMiddleware decoding json request,validates
+// FactorialMiddleware decoding json request,validates
 // then calls next with values in the context
-func factorialMiddleware(next httprouter.Handle) httprouter.Handle {
+func FactorialMiddleware(next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		slog.Info("/calculate POST")
+		var requestData requestData
 
-		var reqData requestData
-
-		// make validation and decoding json, only positive numbers will pass
-		err := json.NewDecoder(r.Body).Decode(&reqData)
+		err := json.NewDecoder(r.Body).Decode(&requestData)
 		if err != nil {
-			slog.Error(err.Error())
 			handleError(w, fmt.Errorf("Incorrect input"))
 			return
 		}
 
-		// put values in context
-		ctx := context.WithValue(r.Context(), "data", map[string]uint64{
-			"a": reqData.A,
-			"b": reqData.B,
-		})
-
+		ctx := createContext(r, requestData)
 		next(w, r.WithContext(ctx), p)
 	}
+}
+
+func createContext(r *http.Request, requestData requestData) context.Context {
+	data := map[string]uint64{
+		"a": requestData.A,
+		"b": requestData.B,
+	}
+
+	return context.WithValue(r.Context(), "data", data)
 }
 
 func сalculateFactorial(num uint64, ch chan uint64) {

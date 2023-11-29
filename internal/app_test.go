@@ -86,7 +86,7 @@ func TestCalculateMiddleware(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			p := httprouter.Params{}
-			factorialMiddleware(next)(w, req, p)
+			FactorialMiddleware(next)(w, req, p)
 
 			var result responseData
 			err = json.NewDecoder(w.Body).Decode(&result)

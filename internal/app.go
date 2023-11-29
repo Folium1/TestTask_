@@ -1,23 +1,25 @@
-package main
+package internal
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
 )
 
-func main() {
+func Run() {
+
 	router := httprouter.New()
 
-	router.POST("/calculate", calculateMiddleware(calculateHandler))
+	router.POST("/calculate", factorialMiddleware(factorialHandler))
 
-	fmt.Println("Starting server on port 8989")
+	slog.Info("Starting server on port 8989")
 	err := http.ListenAndServe(":8989", router)
 	if err != nil {
-		fmt.Println("Failed to start server:", err)
+		slog.Error("Failed to start server:", err)
 	}
 }
 
@@ -31,19 +33,8 @@ type responseData struct {
 	BFactorial uint64 `json:"b"`
 }
 
-func calculateFactorial(num uint64, ch chan uint64) {
-	ch <- (num * calculate(num-1))
-}
-
-func calculate(num uint64) uint64 {
-	var factorial uint64 = 1
-	for i := uint64(2); i <= num; i++ {
-		factorial *= i
-	}
-	return factorial
-}
-
-func calculateHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+// factorialHandler handles concurrently factorials of 2 nums and returns them in json
+func factorialHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	data := r.Context().Value("data")
 
 	convertedMap := data.(map[string]uint64)
@@ -52,9 +43,10 @@ func calculateHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 
 	aCh := make(chan uint64)
 	bCh := make(chan uint64)
-	go calculateFactorial(a, aCh)
-	go calculateFactorial(b, bCh)
+	go сalculateFactorial(a, aCh)
+	go сalculateFactorial(b, bCh)
 
+	// wait for goroutines to finish calculation
 	outputData := responseData{
 		AFactorial: <-aCh,
 		BFactorial: <-bCh,
@@ -63,15 +55,23 @@ func calculateHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Param
 	json.NewEncoder(w).Encode(outputData)
 }
 
-func calculateMiddleware(next httprouter.Handle) httprouter.Handle {
+// factorialMiddleware decoding json request,validates
+// then calls next with values in the context
+func factorialMiddleware(next httprouter.Handle) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		slog.Info("/calculate POST")
+
 		var reqData requestData
+
+		// make validation and decoding json, only positive numbers will pass
 		err := json.NewDecoder(r.Body).Decode(&reqData)
 		if err != nil {
+			slog.Error(err.Error())
 			handleError(w, fmt.Errorf("Incorrect input"))
 			return
 		}
 
+		// put values in context
 		ctx := context.WithValue(r.Context(), "data", map[string]uint64{
 			"a": reqData.A,
 			"b": reqData.B,
@@ -79,6 +79,14 @@ func calculateMiddleware(next httprouter.Handle) httprouter.Handle {
 
 		next(w, r.WithContext(ctx), p)
 	}
+}
+
+func сalculateFactorial(num uint64, ch chan uint64) {
+	var factorial uint64 = 1
+	for i := uint64(2); i <= num; i++ {
+		factorial *= i
+	}
+	ch <- factorial
 }
 
 func handleError(w http.ResponseWriter, err error) {
